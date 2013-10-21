@@ -6,20 +6,20 @@ import scala.collection.mutable
 import scala.collection.JavaConverters._
 import org.hibernate.validator.constraints.NotEmpty
 import mesosphere.marathon.state.MarathonState
-import com.fasterxml.jackson.annotation.JsonProperty
 import mesosphere.marathon.Protos.Constraint
 import javax.validation.constraints.Pattern
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 
 
 /**
  * @author Tobi Knaup
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 class AppDefinition extends MarathonState[Protos.ServiceDefinition] {
-  @JsonProperty
+
   @NotEmpty
   var id: String = ""
   @NotEmpty
-  @JsonProperty
   var cmd: String = ""
   var env: Map[String, String] = Map.empty
   var instances: Int = 0
@@ -33,6 +33,11 @@ class AppDefinition extends MarathonState[Protos.ServiceDefinition] {
 
   var uris: Seq[String] = Seq()
   var ports: Seq[Int] = Nil
+  // Number of new tasks this app may spawn per second in response to
+  // terminated tasks. This prevents frequently failing apps from spamming
+  // the cluster.
+  var taskRateLimit: Double = 1.0
+
 
   def toProto: Protos.ServiceDefinition = {
     val commandInfo = TaskBuilder.commandInfo(this, Seq())
@@ -53,6 +58,7 @@ class AppDefinition extends MarathonState[Protos.ServiceDefinition] {
       .setInstances(instances)
       .addAllPorts(ports.map(_.asInstanceOf[Integer]).asJava)
       .setExecutor(executor)
+      .setTaskRateLimit(taskRateLimit)
       .addAllConstraints(cons.asJava)
       .addResources(cpusResource)
       .addResources(memResource)
@@ -65,6 +71,7 @@ class AppDefinition extends MarathonState[Protos.ServiceDefinition] {
     id = proto.getId
     cmd = proto.getCmd.getValue
     executor = proto.getExecutor
+    taskRateLimit = proto.getTaskRateLimit
     instances = proto.getInstances
     ports = proto.getPortsList.asScala.asInstanceOf[Seq[Int]]
     constraints = proto.getConstraintsList.asScala.map(
